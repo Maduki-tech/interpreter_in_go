@@ -164,7 +164,7 @@ func TestIntegerIdentifierExpression(t *testing.T) {
 		t.Fatalf("exp not *ast.Identifier. Got=%T", stmt.Expression)
 	}
 	if literal.Value != 5 {
-		t.Errorf("Ident.Value not %s. Got=%s", 5, literal.Value)
+		t.Errorf("Ident.Value not %d. Got=%d", 5, literal.Value)
 	}
 
 	if literal.TokenLiteral() != "5" {
