@@ -8,6 +8,17 @@ import (
 	"github.com/maduki-tech/interpreter/token"
 )
 
+const (
+	_ int = iota
+	LOWEST
+	EQUALS      // ==
+	LESSGREATER // > or <
+	SUM         // +
+	PRODUCT     // *
+	PREFIX      // -x or !x
+	CALL        // myfunction(x)
+)
+
 type Parser struct {
 	l               *lexer.Lexer
 	curToken        token.Token
@@ -30,6 +41,8 @@ func New(l *lexer.Lexer) *Parser {
 	// Reading the next 2 tokens to set curToken and peekToken
 	p.nextToken()
 	p.nextToken()
+	p.prefixParserFns = make(map[token.TokenType]prefixParserFn)
+	p.registerPrefix(token.IDENT, p.parseIdentifier)
 	return p
 }
 
@@ -81,8 +94,30 @@ func (p *Parser) parseStatement() ast.Statement {
 	case token.RETURN:
 		return p.parseReturnStatement()
 	default:
+		return p.parseExpressionStatement()
+	}
+}
+
+func (p *Parser) parseExpressionStatement() *ast.ExpressionStatement {
+	stmt := &ast.ExpressionStatement{Token: p.curToken}
+	stmt.Expression = p.parseExpression(LOWEST)
+	if p.peekTokenIs(token.SEMICOLON) {
+		p.nextToken()
+	}
+	return stmt
+}
+
+func (p *Parser) parseExpression(precedence int) ast.Expression {
+	prefix := p.prefixParserFns[p.curToken.Type]
+	if prefix == nil {
 		return nil
 	}
+	leftExp := prefix()
+	return leftExp
+}
+
+func (p *Parser) parseIdentifier() ast.Expression {
+	return &ast.Identifier{Token: p.curToken, Value: p.curToken.Literal}
 }
 
 func (p *Parser) parseReturnStatement() ast.Statement {
