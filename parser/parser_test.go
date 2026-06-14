@@ -143,6 +143,36 @@ func TestIdentifierExpression(t *testing.T) {
 	}
 }
 
+func TestBooleanExpression(t *testing.T) {
+	input := "true;"
+	l := lexer.New(input)
+	p := New(l)
+
+	program := p.ParseProgram()
+
+	checkerParserErrors(t, p)
+
+	if len(program.Statements) != 1 {
+		t.Fatalf("program has not enough statments. Got=%d",
+			len(program.Statements))
+	}
+	stmt, ok := program.Statements[0].(*ast.ExpressionStatement)
+	if !ok {
+		t.Fatalf("program.statment[0] is not ast.ExpressionStatement. Got=%T", program.Statements[0])
+	}
+	ident, ok := stmt.Expression.(*ast.Boolean)
+	if !ok {
+		t.Fatalf("exp not *ast.Identifier. Got=%T", stmt.Expression)
+	}
+	if ident.Value != true {
+		t.Errorf("Ident.Value not %s. Got=%t", "foobar", ident.Value)
+	}
+
+	if ident.TokenLiteral() != "true" {
+		t.Errorf("iden.TokenLiteral not %s. Got=%s", "foobar", ident.TokenLiteral())
+	}
+}
+
 func TestIntegerIdentifierExpression(t *testing.T) {
 	input := "5;"
 	l := lexer.New(input)
