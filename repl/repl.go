@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/maduki-tech/interpreter/evaluator"
 	"github.com/maduki-tech/interpreter/lexer"
 	"github.com/maduki-tech/interpreter/parser"
 )
@@ -31,8 +32,12 @@ func Start(in io.Reader, out io.Writer) {
 			continue
 		}
 
-		io.WriteString(out, program.String())
-		io.WriteString(out, "\n")
+		evaluator := evaluator.Eval(program)
+		if evaluator != nil {
+			io.WriteString(out, evaluator.Inspect())
+			io.WriteString(out, "\n")
+		}
+
 	}
 }
 
