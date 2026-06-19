@@ -1,6 +1,8 @@
 package evaluator
 
 import (
+	"fmt"
+
 	"github.com/maduki-tech/interpreter/ast"
 	"github.com/maduki-tech/interpreter/object"
 )
@@ -15,9 +17,15 @@ func Eval(node ast.Node) object.Object {
 	switch node := node.(type) {
 	// Statements
 	case *ast.Program:
-		return evalStatements(node.Statements)
+		return evalProgram(node)
 	case *ast.ExpressionStatement:
 		return Eval(node.Expression)
+	case *ast.BlockStatement:
+		return evalBlockStatement(node)
+	case *ast.ReturnStatement:
+		val := Eval(node.ReturnValue)
+		return &object.ReturnValue{Value: val}
+
 	// Expressions
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
@@ -26,8 +34,98 @@ func Eval(node ast.Node) object.Object {
 	case *ast.PrefixExpression:
 		right := Eval(node.Right)
 		return evalPrefixExpression(node.Operator, right)
+	case *ast.InfixExpression:
+		left := Eval(node.Left)
+		right := Eval(node.Right)
+		return evalInfixExpression(node.Operator, right, left)
+	case *ast.IfExpression:
+		return evalIfExpression(node)
 	}
 	return nil
+}
+
+func evalProgram(program *ast.Program) object.Object {
+	var result object.Object
+
+	for _, statement := range program.Statements {
+		result = Eval(statement)
+
+		switch result := result.(type) {
+		case *object.ReturnValue:
+			return result.Value
+		case *object.Error:
+			return result
+		}
+	}
+
+	return result
+}
+
+func evalIfExpression(ie *ast.IfExpression) object.Object {
+	condition := Eval(ie.Condition)
+
+	if isTruthy(condition) {
+		return Eval(ie.Consequence)
+	} else if ie.Alternative != nil {
+		return Eval(ie.Alternative)
+	} else {
+		return NULL
+	}
+}
+
+func isTruthy(obj object.Object) bool {
+	switch obj {
+	case NULL:
+		return false
+	case TRUE:
+		return true
+	case FALSE:
+		return false
+	default:
+		return true
+	}
+}
+
+func evalInfixExpression(s string, right, left object.Object) object.Object {
+	switch {
+	case left.Type() == object.INTEGER_OBJ && right.Type() == object.INTEGER_OBJ:
+		return evalIntegerInfixExpression(s, right, left)
+	case s == "==":
+		return nativeBoolToBooleanObject(right == left)
+	case s == "!=":
+		return nativeBoolToBooleanObject(right != left)
+	case left.Type() != right.Type():
+		return newError("type mismatch: %s %s %s", left.Type(), s, right.Type())
+	default:
+		return newError("unknown operator: %s %s %s", left.Type(), s, right.Type())
+	}
+}
+
+func evalIntegerInfixExpression(s string, right, left object.Object) object.Object {
+	leftVal := left.(*object.Integer).Value
+	rightVal := right.(*object.Integer).Value
+
+	switch s {
+	case "+":
+		return &object.Integer{Value: leftVal + rightVal}
+	case "-":
+		return &object.Integer{Value: leftVal - rightVal}
+	case "*":
+		return &object.Integer{Value: leftVal * rightVal}
+	case "/":
+		return &object.Integer{Value: leftVal / rightVal}
+	case "<":
+		return nativeBoolToBooleanObject(leftVal < rightVal)
+	case ">":
+		return nativeBoolToBooleanObject(leftVal > rightVal)
+	case "==":
+		return nativeBoolToBooleanObject(leftVal == rightVal)
+	case "!=":
+		return nativeBoolToBooleanObject(leftVal != rightVal)
+	default:
+		return newError("unknow operator: %s %s %s", left.Type(), s, right.Type())
+
+	}
 }
 
 func evalPrefixExpression(s string, right object.Object) object.Object {
@@ -37,13 +135,13 @@ func evalPrefixExpression(s string, right object.Object) object.Object {
 	case "-":
 		return evalMinusPrefixOperatorExpression(right)
 	default:
-		return NULL
+		return newError("unknown operator: :%s%s", s, right)
 	}
 }
 
 func evalMinusPrefixOperatorExpression(right object.Object) object.Object {
 	if right.Type() != object.INTEGER_OBJ {
-		return NULL
+		return newError("unknown operator: -%s", right.Type())
 	}
 	value := right.(*object.Integer).Value
 	return &object.Integer{Value: -value}
@@ -69,10 +167,23 @@ func nativeBoolToBooleanObject(input bool) object.Object {
 	return FALSE
 }
 
-func evalStatements(statement []ast.Statement) object.Object {
+func evalBlockStatement(block *ast.BlockStatement) object.Object {
 	var result object.Object
-	for _, stmt := range statement {
-		result = Eval(stmt)
+
+	for _, statement := range block.Statements {
+		result = Eval(statement)
+
+		if result != nil {
+			rt := result.Type()
+			if rt == object.RETURN_VALUE_OBJ || rt == object.ERROR_OBJ {
+				return result
+			}
+		}
 	}
+
 	return result
+}
+
+func newError(format string, a ...any) *object.Error {
+	return &object.Error{Message: fmt.Sprintf(format, a...)}
 }
